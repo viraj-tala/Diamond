@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import { asc, desc, eq, inArray } from "drizzle-orm";
+import { db, qualityChecks, stageEvents, stones, users } from "@/db";
 import { PageHeader } from "@/components/PageHeader";
 import { StageBadge } from "@/components/Badge";
 import { formatDateTime, formatNumber } from "@/lib/utils";
@@ -8,21 +9,27 @@ import { AdvanceStageForm } from "./actions";
 import { STAGES, STAGE_ORDER } from "@/lib/constants";
 
 export default async function StoneDetailPage({ params }: { params: { id: string } }) {
-  const stone = await prisma.stone.findUnique({
-    where: { id: params.id },
-    include: {
+  const stone = await db.query.stones.findFirst({
+    where: eq(stones.id, params.id),
+    with: {
       roughStone: true,
-      events: { orderBy: { startedAt: "desc" }, include: { worker: { select: { name: true } } } },
-      qualityChecks: { orderBy: { createdAt: "desc" }, take: 3 },
+      events: {
+        orderBy: [desc(stageEvents.startedAt)],
+        with: { worker: { columns: { name: true } } },
+      },
+      qualityChecks: {
+        orderBy: [desc(qualityChecks.createdAt)],
+        limit: 3,
+      },
     },
   });
   if (!stone) notFound();
 
-  const workers = await prisma.user.findMany({
-    where: { role: { in: ["WORKER", "SUPERVISOR"] } },
-    select: { id: true, name: true },
-    orderBy: { name: "asc" },
-  });
+  const workerOptions = await db
+    .select({ id: users.id, name: users.name })
+    .from(users)
+    .where(inArray(users.role, ["WORKER", "SUPERVISOR"]))
+    .orderBy(asc(users.name));
 
   const currentIdx = STAGE_ORDER[stone.currentStage as keyof typeof STAGE_ORDER] ?? 0;
   const nextStage = STAGES[currentIdx + 1];
@@ -33,7 +40,21 @@ export default async function StoneDetailPage({ params }: { params: { id: string
     <div>
       <PageHeader
         title={stone.qrCode}
-        description={stone.roughStone ? `From rough ${stone.roughStone.code}` : "Standalone stone"}
+        description={
+          <>
+            {stone.roughStone ? `From rough ${stone.roughStone.code}` : "Standalone stone"}
+            {stone.rfidTag && (
+              <span className="ml-3 text-xs text-slate-500">
+                RFID: <span className="font-mono">{stone.rfidTag}</span>
+              </span>
+            )}
+            {stone.reworkCount > 0 && (
+              <span className="ml-3 inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                Reworked {stone.reworkCount}×
+              </span>
+            )}
+          </>
+        }
         action={<Link href="/manufacturing" className="btn-secondary text-sm">← Back</Link>}
       />
 
@@ -93,9 +114,10 @@ export default async function StoneDetailPage({ params }: { params: { id: string
           ) : (
             <AdvanceStageForm
               stoneId={stone.id}
+              currentStage={stone.currentStage}
               currentWeight={stone.currentWeightCt}
               nextStage={nextStage}
-              workers={workers}
+              workers={workerOptions}
             />
           )}
 

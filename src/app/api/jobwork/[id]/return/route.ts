@@ -1,46 +1,64 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { prisma } from "@/lib/prisma";
+import { eq } from "drizzle-orm";
+import { db, jobOrders, jobOrderItems, stones, vendors } from "@/db";
 import { requireSession } from "@/lib/session";
 import { recordTraceEvent } from "@/lib/trace-recorder";
 
 const schema = z.object({
-  items: z.array(z.object({
-    id: z.string(),
-    stoneId: z.string(),
-    returnWeightCt: z.number().min(0),
-  })),
+  items: z.array(
+    z.object({
+      id: z.string(),
+      stoneId: z.string(),
+      returnWeightCt: z.number().min(0),
+    }),
+  ),
 });
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   const session = await requireSession();
   const data = schema.parse(await req.json());
 
-  const order = await prisma.jobOrder.findUnique({ where: { id: params.id }, include: { vendor: true } });
+  const [order] = await db
+    .select({
+      id: jobOrders.id,
+      orderCode: jobOrders.orderCode,
+      totalSentCt: jobOrders.totalSentCt,
+      ratePerCt: jobOrders.ratePerCt,
+      vendorName: vendors.name,
+    })
+    .from(jobOrders)
+    .innerJoin(vendors, eq(jobOrders.vendorId, vendors.id))
+    .where(eq(jobOrders.id, params.id))
+    .limit(1);
+
   if (!order) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  let totalReturn = 0;
-  await prisma.$transaction(async (tx) => {
+  const totalReturn = data.items.reduce((a, it) => a + it.returnWeightCt, 0);
+  const loss = order.totalSentCt - totalReturn;
+  const payment = order.ratePerCt * totalReturn;
+
+  await db.transaction(async (tx) => {
     for (const it of data.items) {
-      await tx.jobOrderItem.update({ where: { id: it.id }, data: { returnWeightCt: it.returnWeightCt } });
-      await tx.stone.update({
-        where: { id: it.stoneId },
-        data: { currentWeightCt: it.returnWeightCt },
-      });
-      totalReturn += it.returnWeightCt;
+      await tx
+        .update(jobOrderItems)
+        .set({ returnWeightCt: it.returnWeightCt })
+        .where(eq(jobOrderItems.id, it.id));
+      await tx
+        .update(stones)
+        .set({ currentWeightCt: it.returnWeightCt })
+        .where(eq(stones.id, it.stoneId));
     }
-    const loss = order.totalSentCt - totalReturn;
-    const payment = order.ratePerCt * totalReturn;
-    await tx.jobOrder.update({
-      where: { id: params.id },
-      data: {
+    await tx
+      .update(jobOrders)
+      .set({
         totalReturnCt: totalReturn,
         lossCt: loss,
         returnedAt: new Date(),
         status: "RETURNED",
         totalPayment: payment,
-      },
-    });
+      })
+      .where(eq(jobOrders.id, params.id));
   });
 
   await Promise.all(
@@ -49,7 +67,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         stoneId: it.stoneId,
         eventType: "RETURNED_FROM_VENDOR",
         actor: session.user.name,
-        location: order.vendor.name,
+        location: order.vendorName,
         metadata: { orderCode: order.orderCode, returnWeight: it.returnWeightCt },
       }),
     ),

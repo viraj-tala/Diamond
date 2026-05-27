@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import { asc, eq } from "drizzle-orm";
+import { db, stones, traceEvents } from "@/db";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/Badge";
 import { formatDateTime } from "@/lib/utils";
@@ -8,9 +9,12 @@ import { ShieldCheck, ShieldAlert } from "lucide-react";
 import Link from "next/link";
 
 export default async function StoneTracePage({ params }: { params: { stoneId: string } }) {
-  const stone = await prisma.stone.findUnique({
-    where: { id: params.stoneId },
-    include: { roughStone: true, traceEvents: { orderBy: { recordedAt: "asc" } } },
+  const stone = await db.query.stones.findFirst({
+    where: eq(stones.id, params.stoneId),
+    with: {
+      roughStone: true,
+      traceEvents: { orderBy: [asc(traceEvents.recordedAt)] },
+    },
   });
   if (!stone) notFound();
 
@@ -69,7 +73,7 @@ export default async function StoneTracePage({ params }: { params: { stoneId: st
                 <li key={ev.id} className="border border-slate-200 rounded-lg p-3">
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <div className="flex items-center gap-3">
-                      <span className="w-6 h-6 rounded-full bg-brand-100 text-brand-700 font-mono text-xs flex items-center justify-center">{idx + 1}</span>
+                      <span className="w-6 h-6 rounded-full bg-iris-100 text-iris-700 font-mono text-xs flex items-center justify-center">{idx + 1}</span>
                       <Badge tone="brand">{ev.eventType}</Badge>
                       <span className="text-sm">by {ev.actor}</span>
                       {ev.location && <span className="text-xs text-slate-500">· {ev.location}</span>}

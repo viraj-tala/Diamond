@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { prisma } from "@/lib/prisma";
+import { asc } from "drizzle-orm";
+import { db, vendors } from "@/db";
 import { requireSession } from "@/lib/session";
 
 const schema = z.object({
@@ -12,7 +13,10 @@ const schema = z.object({
 
 export async function GET() {
   await requireSession();
-  const items = await prisma.vendor.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } });
+  const items = await db
+    .select({ id: vendors.id, name: vendors.name })
+    .from(vendors)
+    .orderBy(asc(vendors.name));
   return NextResponse.json({ items });
 }
 
@@ -20,9 +24,13 @@ export async function POST(req: Request) {
   await requireSession();
   const data = schema.parse(await req.json());
   try {
-    const v = await prisma.vendor.create({ data });
+    const [v] = await db.insert(vendors).values(data).returning({ id: vendors.id });
     return NextResponse.json({ id: v.id });
-  } catch {
-    return NextResponse.json({ error: "Vendor name must be unique" }, { status: 400 });
+  } catch (e: unknown) {
+    const code = (e as { code?: string } | null)?.code;
+    if (code === "23505") {
+      return NextResponse.json({ error: "Vendor name must be unique" }, { status: 400 });
+    }
+    return NextResponse.json({ error: "Failed to create" }, { status: 400 });
   }
 }

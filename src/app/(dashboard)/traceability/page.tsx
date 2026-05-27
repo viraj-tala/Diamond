@@ -1,19 +1,21 @@
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
+import { count, desc } from "drizzle-orm";
+import { db, stones, traceEvents } from "@/db";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/Badge";
 import { formatDateTime } from "@/lib/utils";
 import { ShieldCheck } from "lucide-react";
 
 export default async function TraceabilityPage() {
-  const recent = await prisma.traceEvent.findMany({
-    orderBy: { recordedAt: "desc" },
-    take: 60,
-    include: { stone: { select: { id: true, qrCode: true } } },
-  });
-
-  const stoneTraceCount = await prisma.stone.count();
-  const eventCount = await prisma.traceEvent.count();
+  const [recent, [stoneCountRow], [eventCountRow]] = await Promise.all([
+    db.query.traceEvents.findMany({
+      orderBy: [desc(traceEvents.recordedAt)],
+      limit: 60,
+      with: { stone: { columns: { id: true, qrCode: true } } },
+    }),
+    db.select({ c: count() }).from(stones),
+    db.select({ c: count() }).from(traceEvents),
+  ]);
 
   return (
     <div>
@@ -25,11 +27,11 @@ export default async function TraceabilityPage() {
       <div className="grid grid-cols-3 gap-4 mb-6">
         <div className="card p-4">
           <div className="text-xs text-slate-500">Tracked stones</div>
-          <div className="text-2xl font-semibold">{stoneTraceCount}</div>
+          <div className="text-2xl font-semibold">{stoneCountRow.c}</div>
         </div>
         <div className="card p-4">
           <div className="text-xs text-slate-500">Trace events</div>
-          <div className="text-2xl font-semibold">{eventCount}</div>
+          <div className="text-2xl font-semibold">{eventCountRow.c}</div>
         </div>
         <div className="card p-4 bg-gradient-to-br from-emerald-50 to-emerald-100">
           <div className="text-xs text-emerald-700 font-medium">CHAIN STATUS</div>

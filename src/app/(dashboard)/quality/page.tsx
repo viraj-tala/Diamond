@@ -1,26 +1,29 @@
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
+import { count, desc } from "drizzle-orm";
+import { db, qualityChecks } from "@/db";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/Badge";
 import { formatDateTime, formatNumber } from "@/lib/utils";
 import { Plus, ScanSearch } from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
 
 export default async function QualityPage() {
-  const checks = await prisma.qualityCheck.findMany({
-    orderBy: { createdAt: "desc" },
-    include: {
-      stone: { select: { qrCode: true } },
-      inspector: { select: { name: true } },
-    },
-    take: 100,
-  });
+  const [checks, stats] = await Promise.all([
+    db.query.qualityChecks.findMany({
+      orderBy: [desc(qualityChecks.createdAt)],
+      with: {
+        stone: { columns: { qrCode: true } },
+        inspector: { columns: { name: true } },
+      },
+      limit: 100,
+    }),
+    db
+      .select({ recommendation: qualityChecks.recommendation, c: count() })
+      .from(qualityChecks)
+      .groupBy(qualityChecks.recommendation),
+  ]);
 
-  const stats = await prisma.qualityCheck.groupBy({
-    by: ["recommendation"],
-    _count: true,
-  });
-
-  const getCount = (k: string) => stats.find((s) => s.recommendation === k)?._count ?? 0;
+  const getCount = (k: string) => stats.find((s) => s.recommendation === k)?.c ?? 0;
 
   return (
     <div>
@@ -51,10 +54,12 @@ export default async function QualityPage() {
       </div>
 
       {checks.length === 0 ? (
-        <div className="card p-12 text-center text-slate-500">
-          <ScanSearch className="w-8 h-8 mx-auto text-slate-300 mb-3" />
-          No inspections yet. <Link href="/quality/new" className="text-brand-600 font-medium">Run the first one</Link>.
-        </div>
+        <EmptyState
+          icon={ScanSearch}
+          title="No quality inspections yet"
+          description="Submit any post-polish stone for defect detection. The detector returns a 0–100 score with PASS / REWORK / REJECT, and a tamper-evident QC_INSPECTED event is appended to the stone's audit chain."
+          cta={{ label: "Run first inspection", href: "/quality/new" }}
+        />
       ) : (
         <div className="table-wrap">
           <table className="table">
@@ -70,7 +75,9 @@ export default async function QualityPage() {
             </thead>
             <tbody>
               {checks.map((c) => {
-                const defects = (() => { try { return JSON.parse(c.defectsFound ?? "[]") as string[]; } catch { return []; } })();
+                const defects = (() => {
+                  try { return JSON.parse(c.defectsFound ?? "[]") as string[]; } catch { return []; }
+                })();
                 return (
                   <tr key={c.id}>
                     <td className="font-mono text-xs">{c.stone.qrCode}</td>

@@ -1,13 +1,18 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { desc } from "drizzle-orm";
+import { db, roughStones } from "@/db";
 import { requireSession } from "@/lib/session";
 
 export async function GET() {
   await requireSession();
-  const items = await prisma.roughStone.findMany({
-    orderBy: { createdAt: "desc" },
-    select: { id: true, code: true, weightCt: true },
-    take: 200,
-  });
+  const items = await db
+    .select({
+      id: roughStones.id,
+      code: roughStones.code,
+      weightCt: roughStones.weightCt,
+    })
+    .from(roughStones)
+    .orderBy(desc(roughStones.createdAt))
+    .limit(200);
   return NextResponse.json({ items });
 }

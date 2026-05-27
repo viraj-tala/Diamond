@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
+import { and, asc, eq } from "drizzle-orm";
+import { db, pricePoints } from "@/db";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/Badge";
 import { formatCurrency, formatDate, formatNumber, caratBucket, estimatePricePerCt } from "@/lib/utils";
@@ -21,10 +22,18 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
   const carat = searchParams.carat ? parseFloat(searchParams.carat) : 1.0;
   const bucket = caratBucket(carat);
 
-  const points = await prisma.pricePoint.findMany({
-    where: { shape, color, clarity, caratBucket: bucket },
-    orderBy: { recordedAt: "asc" },
-  });
+  const points = await db
+    .select()
+    .from(pricePoints)
+    .where(
+      and(
+        eq(pricePoints.shape, shape),
+        eq(pricePoints.color, color),
+        eq(pricePoints.clarity, clarity),
+        eq(pricePoints.caratBucket, bucket),
+      ),
+    )
+    .orderBy(asc(pricePoints.recordedAt));
 
   const estimated = estimatePricePerCt(carat, color, clarity, shape);
 
@@ -94,7 +103,7 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
         <h2 className="font-semibold mb-3">Price trend</h2>
         {series.length === 0 ? (
           <div className="text-sm text-slate-500 py-12 text-center">
-            No history for this combination. <Link href="/pricing/add" className="text-brand-600">Add price points</Link>.
+            No history for this combination. <Link href="/pricing/add" className="text-iris-600">Add price points</Link>.
           </div>
         ) : (
           <PriceChart data={series} />

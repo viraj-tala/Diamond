@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import { eq } from "drizzle-orm";
+import { db, jobOrders } from "@/db";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/Badge";
 import { formatCurrency, formatDateTime, formatNumber } from "@/lib/utils";
@@ -7,9 +8,12 @@ import Link from "next/link";
 import { ReturnOrderForm, MarkPaidButton } from "./actions";
 
 export default async function JobOrderDetailPage({ params }: { params: { id: string } }) {
-  const order = await prisma.jobOrder.findUnique({
-    where: { id: params.id },
-    include: { vendor: true, items: { include: { stone: true } } },
+  const order = await db.query.jobOrders.findFirst({
+    where: eq(jobOrders.id, params.id),
+    with: {
+      vendor: true,
+      items: { with: { stone: true } },
+    },
   });
   if (!order) notFound();
 

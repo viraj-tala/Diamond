@@ -1,15 +1,24 @@
-import { prisma } from "@/lib/prisma";
+import { desc } from "drizzle-orm";
+import { db, users } from "@/db";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/Badge";
 import { requireSession } from "@/lib/session";
 import { formatDate } from "@/lib/utils";
+import { DevicesPanel } from "./devices-panel";
 
 export default async function SettingsPage() {
   const session = await requireSession();
-  const users = await prisma.user.findMany({
-    orderBy: { createdAt: "desc" },
-    select: { id: true, name: true, email: true, role: true, createdAt: true },
-  });
+  const isAdmin = session.user.role === "ADMIN" || session.user.role === "OWNER";
+  const rows = await db
+    .select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      role: users.role,
+      createdAt: users.createdAt,
+    })
+    .from(users)
+    .orderBy(desc(users.createdAt));
 
   return (
     <div>
@@ -22,7 +31,7 @@ export default async function SettingsPage() {
             <table className="table">
               <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Joined</th></tr></thead>
               <tbody>
-                {users.map((u) => (
+                {rows.map((u) => (
                   <tr key={u.id}>
                     <td className="font-medium">{u.name}</td>
                     <td className="text-xs">{u.email}</td>
@@ -51,11 +60,17 @@ export default async function SettingsPage() {
           </div>
           <hr className="my-3" />
           <div className="text-xs text-slate-500">
-            Yeild · v0.1<br />
-            SQLite database at <code>prisma/dev.db</code>
+            Lustra · v1.0<br />
+            PostgreSQL via Drizzle ORM
           </div>
         </div>
       </div>
+
+      {isAdmin && (
+        <div className="mt-6">
+          <DevicesPanel />
+        </div>
+      )}
     </div>
   );
 }

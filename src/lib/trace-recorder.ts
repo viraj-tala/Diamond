@@ -1,4 +1,5 @@
-import { prisma } from "@/lib/prisma";
+import { desc, eq } from "drizzle-orm";
+import { db, traceEvents } from "@/db";
 import { hashTraceEvent } from "@/lib/trace-hash";
 
 interface RecordInput {
@@ -9,11 +10,19 @@ interface RecordInput {
   metadata?: Record<string, unknown>;
 }
 
-export async function recordTraceEvent({ stoneId, eventType, actor, location, metadata }: RecordInput) {
-  const prev = await prisma.traceEvent.findFirst({
-    where: { stoneId },
-    orderBy: { recordedAt: "desc" },
-  });
+export async function recordTraceEvent({
+  stoneId,
+  eventType,
+  actor,
+  location,
+  metadata,
+}: RecordInput) {
+  const [prev] = await db
+    .select({ hash: traceEvents.hash })
+    .from(traceEvents)
+    .where(eq(traceEvents.stoneId, stoneId))
+    .orderBy(desc(traceEvents.recordedAt))
+    .limit(1);
 
   const recordedAt = new Date();
   const metaStr = metadata ? JSON.stringify(metadata) : null;
@@ -27,8 +36,9 @@ export async function recordTraceEvent({ stoneId, eventType, actor, location, me
     prevHash: prev?.hash ?? null,
   });
 
-  return prisma.traceEvent.create({
-    data: {
+  const [inserted] = await db
+    .insert(traceEvents)
+    .values({
       stoneId,
       eventType,
       actor,
@@ -37,6 +47,8 @@ export async function recordTraceEvent({ stoneId, eventType, actor, location, me
       recordedAt,
       prevHash: prev?.hash ?? null,
       hash,
-    },
-  });
+    })
+    .returning();
+
+  return inserted;
 }

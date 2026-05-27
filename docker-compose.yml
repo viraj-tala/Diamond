@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: yeild-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: yeild
+      POSTGRES_PASSWORD: yeild_dev_password
+      POSTGRES_DB: yeild
+    ports:
+      - "5432:5432"
+    volumes:
+      - yeild_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U yeild -d yeild"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  yeild_pg_data:

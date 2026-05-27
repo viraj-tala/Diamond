@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { prisma } from "@/lib/prisma";
+import { db, inventoryItems } from "@/db";
 import { requireSession } from "@/lib/session";
 
 const schema = z.object({
@@ -24,8 +24,9 @@ export async function POST(req: Request) {
   const totalPrice = data.caratWeight * data.pricePerCt;
 
   try {
-    const item = await prisma.inventoryItem.create({
-      data: {
+    const [item] = await db
+      .insert(inventoryItems)
+      .values({
         sku: data.sku,
         shape: data.shape,
         caratWeight: data.caratWeight,
@@ -39,11 +40,14 @@ export async function POST(req: Request) {
         videoUrl: data.videoUrl,
         location: data.location,
         stoneId: data.stoneId,
-      },
-    });
+      })
+      .returning({ id: inventoryItems.id });
     return NextResponse.json({ id: item.id });
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : "Failed";
-    return NextResponse.json({ error: msg.includes("Unique") ? "SKU already exists" : "Failed to create" }, { status: 400 });
+    const code = (e as { code?: string } | null)?.code;
+    if (code === "23505") {
+      return NextResponse.json({ error: "SKU already exists" }, { status: 400 });
+    }
+    return NextResponse.json({ error: "Failed to create" }, { status: 400 });
   }
 }

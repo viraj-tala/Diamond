@@ -1,10 +1,11 @@
-# Yeild — Diamond Industry Suite
+# Lustra — Diamond Manufacturing OS
 
-A single Next.js application covering the eight core operations of a diamond
-factory and trading business, structured internally as separate modules so each
-can later be split into its own service.
-
-Runs entirely on your machine on SQLite — no cloud dependencies.
+A single Next.js application covering the nine core operations of a diamond
+factory and trading business — yield planning, manufacturing tracking, IoT
+scanning, worker productivity, inventory + B2B marketplace, price intelligence,
+hash-chained traceability, AI-assisted quality control, and vendor job-work —
+structured internally as separate modules so each can later be split into its
+own service.
 
 ## Modules
 
@@ -22,7 +23,7 @@ A dashboard cross-cuts all modules with live counters, recent events, and latest
 ## Tech stack
 
 - **Next.js 14** App Router + TypeScript
-- **Prisma** ORM with **SQLite** (`prisma/dev.db`)
+- **Drizzle ORM** with **PostgreSQL** (postgres.js driver)
 - **NextAuth.js** credentials provider (JWT sessions, bcrypt-hashed passwords)
 - **Tailwind CSS** for styling
 - **Recharts** for trend charts
@@ -30,18 +31,22 @@ A dashboard cross-cuts all modules with live counters, recent events, and latest
 
 ## Quick start
 
+### 1. Start Postgres via Docker
+
 ```powershell
-# 1. install
+docker compose up -d        # starts postgres on localhost:5432, data persists in a volume
+```
+
+The `.env` is already wired to this local DB. To stop later: `docker compose down` (data persists). To wipe everything: `docker compose down -v`.
+
+**Other options:** instead of Docker, you can use [Neon](https://neon.tech) (free hosted) or any other Postgres — just replace `DATABASE_URL` in `.env` with your connection string.
+
+### 2. Install, migrate, seed, run
+
+```powershell
 npm install
-
-# 2. create DB + tables
-npx prisma db push
-
-# 3. seed demo data (4 rough stones, stones at various stages,
-#    5 workers with 2 weeks of logs, vendors, inventory, price history, etc.)
-npm run db:seed
-
-# 4. run
+npm run db:push       # create all tables in Postgres
+npm run db:seed       # populate demo data
 npm run dev
 ```
 
@@ -51,20 +56,22 @@ Open http://localhost:3000.
 
 | Email | Password | Role |
 | --- | --- | --- |
-| `admin@yeild.local` | `admin123` | ADMIN |
-| `owner@yeild.local` | `owner123` | OWNER |
-| `planner@yeild.local` | `planner123` | PLANNER |
-| `emp001@yeild.local` … `emp005@yeild.local` | `worker123` | WORKER |
+| `admin@lustra.local` | `admin123` | ADMIN |
+| `owner@lustra.local` | `owner123` | OWNER |
+| `planner@lustra.local` | `planner123` | PLANNER |
+| `emp001@lustra.local` … `emp005@lustra.local` | `worker123` | WORKER |
 
 Or click **Get started** on the home page to create your own account.
 
 ## Project layout
 
 ```
-prisma/
-  schema.prisma          ← all models for all 8 modules
-  seed.ts                ← demo data
+drizzle.config.ts        ← Drizzle Kit config (migrations + push + studio)
 src/
+  db/
+    schema.ts            ← all tables, enums, and relations for all 8 modules
+    index.ts             ← postgres.js pool + drizzle wrapper (singleton)
+    seed.ts              ← demo data
   app/
     (auth)/login, register
     (dashboard)/
@@ -90,7 +97,6 @@ src/
       register/
   components/            ← Sidebar, Header, StatCard, Badge, PageHeader
   lib/
-    prisma.ts            ← DB client singleton
     auth.ts              ← NextAuth options
     session.ts           ← requireSession helpers
     constants.ts         ← Role / Stage / Shape / Color / Clarity tables
@@ -100,6 +106,25 @@ src/
     trace-hash.ts        ← SHA-256 canonicalizer
     quality-stub.ts      ← deterministic "defect detector"
 ```
+
+## Useful commands
+
+```powershell
+npm run dev               # development
+npm run build             # production build
+npm run start             # serve production build
+
+npm run db:push           # sync schema to DB (fast iteration; non-destructive for compatible changes)
+npm run db:generate       # generate a migration SQL file from schema changes
+npm run db:migrate        # apply generated migrations
+npm run db:studio         # Drizzle Studio (visual DB browser, opens in browser)
+npm run db:seed           # reseed demo data (skips if rough stones already exist)
+```
+
+### Schema changes: push vs generate
+
+- **`db:push`** is the fastest path while developing — it diffs your schema and applies changes directly. Use this during dev.
+- **`db:generate` + `db:migrate`** produces versioned migration SQL files in `./drizzle/`. Use this once you go to production so changes are reviewable and reproducible.
 
 ## Where production work would go next
 
@@ -113,32 +138,8 @@ steps before shipping to a real factory:
 | Workers | Daily logs + incentives | Biometric attendance, shift planning, payroll export |
 | Inventory | CRUD + search + listing + inquiries | Image upload (S3), GIA cert auto-fetch, multi-currency |
 | Pricing | Manual price points + chart | Auto-pull Rapaport CSVs, IDEX scraping, IDEX/RAPNET API |
-| Traceability | SHA-256 hash chain in SQLite | Notarize to public chain (Hyperledger, Polygon) for tamper-proof externally |
+| Traceability | SHA-256 hash chain in Postgres | Notarize to public chain (Hyperledger, Polygon) for tamper-proof externally |
 | Quality | Stub scoring (`src/lib/quality-stub.ts`) | Wire YOLO / SAM / custom CV pipeline; image upload |
 | Job Work | Order + return + loss + payment | Vendor portal, photo proof at hand-off, escrow |
 | Auth | Credentials + roles | SSO, per-module RBAC, audit log of admin actions |
-| Storage | SQLite | PostgreSQL when concurrent writes matter; current code only touches `DATABASE_URL` |
-
-## Useful commands
-
-```powershell
-npm run dev         # development
-npm run build       # production build (runs prisma generate + db push first)
-npm run start       # serve production build
-npm run db:seed     # reset + reseed demo data
-npm run db:studio   # Prisma Studio (visual DB browser)
-npm run db:push     # apply schema changes to dev.db
-```
-
-## Environment variables
-
-`.env` (already created):
-
-```
-DATABASE_URL="file:./dev.db"
-NEXTAUTH_URL="http://localhost:3000"
-NEXTAUTH_SECRET="change-me-in-prod-..."
-```
-
-For real deployment, generate a strong `NEXTAUTH_SECRET` with
-`openssl rand -base64 32` and point `DATABASE_URL` at PostgreSQL.
+| Storage | Single Postgres | Connection pool tuning, read replicas, object storage for media |

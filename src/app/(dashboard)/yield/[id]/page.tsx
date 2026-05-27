@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import { desc, eq } from "drizzle-orm";
+import { db, cutPlans, roughStones } from "@/db";
 import { PageHeader } from "@/components/PageHeader";
 import { formatCurrency, formatNumber } from "@/lib/utils";
 import { Badge } from "@/components/Badge";
@@ -7,12 +8,15 @@ import { SelectPlanButton } from "./actions";
 import Link from "next/link";
 
 export default async function RoughDetailPage({ params }: { params: { id: string } }) {
-  const rough = await prisma.roughStone.findUnique({
-    where: { id: params.id },
-    include: {
+  const rough = await db.query.roughStones.findFirst({
+    where: eq(roughStones.id, params.id),
+    with: {
       cutPlans: {
-        include: { outputs: true, createdBy: { select: { name: true } } },
-        orderBy: { estProfit: "desc" },
+        with: {
+          outputs: true,
+          createdBy: { columns: { name: true } },
+        },
+        orderBy: [desc(cutPlans.estProfit)],
       },
     },
   });
@@ -53,7 +57,7 @@ export default async function RoughDetailPage({ params }: { params: { id: string
         {rough.cutPlans.map((p) => {
           const margin = p.estRevenue > 0 ? (p.estProfit / p.estRevenue) * 100 : 0;
           return (
-            <div key={p.id} className={`card p-5 ${p.isSelected ? "ring-2 ring-brand-500" : ""}`}>
+            <div key={p.id} className={`card p-5 ${p.isSelected ? "ring-2 ring-iris-500" : ""}`}>
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-sm font-semibold">{p.name}</div>

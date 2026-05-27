@@ -28,13 +28,13 @@ export default async function Home() {
   if (session) redirect("/dashboard");
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-brand-50">
+    <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-iris-50">
       <header className="border-b border-slate-200 bg-white/70 backdrop-blur">
         <div className="mx-auto max-w-7xl px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Gem className="w-6 h-6 text-brand-600" />
-            <span className="font-bold text-lg">Yeild</span>
-            <span className="text-xs text-slate-500 hidden sm:inline">Diamond Industry Suite</span>
+            <Gem className="w-6 h-6 text-iris-600" />
+            <span className="font-bold text-lg">Lustra</span>
+            <span className="text-xs text-slate-500 hidden sm:inline">Diamond Manufacturing OS</span>
           </div>
           <nav className="flex items-center gap-3">
             <Link href="/login" className="btn-secondary text-sm">Login</Link>
@@ -61,7 +61,7 @@ export default async function Home() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {modules.map((m) => (
             <div key={m.title} className="card p-5">
-              <div className="w-10 h-10 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-lg bg-iris-50 text-iris-600 flex items-center justify-center">
                 <m.icon className="w-5 h-5" />
               </div>
               <h3 className="mt-3 font-semibold text-slate-900">{m.title}</h3>
@@ -72,7 +72,7 @@ export default async function Home() {
       </section>
 
       <footer className="border-t border-slate-200 py-6 text-center text-xs text-slate-500">
-        Built with Next.js · Prisma · SQLite — runs entirely on your machine.
+        Built with Next.js · Drizzle · PostgreSQL — self-hostable, no per-seat licensing.
       </footer>
     </main>
   );

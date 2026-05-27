@@ -1,19 +1,28 @@
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
+import { desc, sum } from "drizzle-orm";
+import { db, jobOrders } from "@/db";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/Badge";
-import { formatCurrency, formatDate, formatNumber } from "@/lib/utils";
+import { formatCurrency, formatNumber } from "@/lib/utils";
 import { Plus, Truck } from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
 
 export default async function JobWorkPage() {
-  const orders = await prisma.jobOrder.findMany({
-    orderBy: { sentAt: "desc" },
-    include: { vendor: true, items: true },
-  });
+  const [orders, [totals]] = await Promise.all([
+    db.query.jobOrders.findMany({
+      orderBy: [desc(jobOrders.sentAt)],
+      with: { vendor: true, items: true },
+    }),
+    db
+      .select({
+        lossCt: sum(jobOrders.lossCt),
+        totalPayment: sum(jobOrders.totalPayment),
+      })
+      .from(jobOrders),
+  ]);
 
-  const totals = await prisma.jobOrder.aggregate({
-    _sum: { lossCt: true, totalPayment: true },
-  });
+  const totalLoss = Number(totals?.lossCt ?? 0);
+  const totalPayments = Number(totals?.totalPayment ?? 0);
 
   return (
     <div>
@@ -38,19 +47,21 @@ export default async function JobWorkPage() {
         </div>
         <div className="card p-4">
           <div className="text-xs text-slate-500">Total loss tracked</div>
-          <div className="text-2xl font-semibold text-red-600">{formatNumber(totals._sum.lossCt ?? 0)} ct</div>
+          <div className="text-2xl font-semibold text-red-600">{formatNumber(totalLoss)} ct</div>
         </div>
         <div className="card p-4">
           <div className="text-xs text-slate-500">Vendor payments</div>
-          <div className="text-2xl font-semibold">{formatCurrency(totals._sum.totalPayment ?? 0)}</div>
+          <div className="text-2xl font-semibold">{formatCurrency(totalPayments)}</div>
         </div>
       </div>
 
       {orders.length === 0 ? (
-        <div className="card p-12 text-center text-slate-500">
-          <Truck className="w-8 h-8 mx-auto text-slate-300 mb-3" />
-          No job orders yet. <Link href="/jobwork/new" className="text-brand-600 font-medium">Create one</Link>.
-        </div>
+        <EmptyState
+          icon={Truck}
+          title="No job orders yet"
+          description="Send stones to a vendor for outsourced sawing, bruting, polishing, or QC. The system locks in what you sent, tracks what came back, computes weight loss, and calculates payment automatically."
+          cta={{ label: "Create first job order", href: "/jobwork/new" }}
+        />
       ) : (
         <div className="table-wrap">
           <table className="table">
@@ -81,7 +92,7 @@ export default async function JobWorkPage() {
                   <td>{formatCurrency(o.totalPayment)} {o.paid ? <span className="text-xs text-emerald-700">paid</span> : ""}</td>
                   <td><StatusBadge status={o.status} /></td>
                   <td>
-                    <Link href={`/jobwork/${o.id}`} className="text-brand-600 text-xs font-medium">Open →</Link>
+                    <Link href={`/jobwork/${o.id}`} className="text-iris-600 text-xs font-medium">Open →</Link>
                   </td>
                 </tr>
               ))}

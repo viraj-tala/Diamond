@@ -1,16 +1,18 @@
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
+import { desc } from "drizzle-orm";
+import { db, cutPlans, roughStones } from "@/db";
 import { PageHeader } from "@/components/PageHeader";
+import { EmptyState } from "@/components/EmptyState";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/utils";
-import { Plus } from "lucide-react";
+import { Gem, Plus } from "lucide-react";
 
 export default async function YieldListPage() {
-  const stones = await prisma.roughStone.findMany({
-    orderBy: { createdAt: "desc" },
-    include: {
+  const stones = await db.query.roughStones.findMany({
+    orderBy: [desc(roughStones.createdAt)],
+    with: {
       cutPlans: {
-        orderBy: { estProfit: "desc" },
-        take: 1,
+        orderBy: [desc(cutPlans.estProfit)],
+        limit: 1,
       },
     },
   });
@@ -29,9 +31,12 @@ export default async function YieldListPage() {
       />
 
       {stones.length === 0 ? (
-        <div className="card p-12 text-center text-slate-500">
-          No rough stones yet. <Link href="/yield/new" className="text-brand-600 font-medium">Add one</Link> to generate cut plans.
-        </div>
+        <EmptyState
+          icon={Gem}
+          title="No rough stones registered yet"
+          description="Register your first rough to instantly see three cut-plan options — single large stone, two equal stones, yield-max — with revenue, cost, and profit side-by-side."
+          cta={{ label: "Register the first rough", href: "/yield/new" }}
+        />
       ) : (
         <div className="table-wrap">
           <table className="table">
@@ -60,7 +65,7 @@ export default async function YieldListPage() {
                     <td className="text-emerald-700 font-medium">{best ? formatCurrency(best.estProfit) : "—"}</td>
                     <td className="text-xs text-slate-500">{formatDate(s.createdAt)}</td>
                     <td>
-                      <Link href={`/yield/${s.id}`} className="text-brand-600 text-xs font-medium">Open →</Link>
+                      <Link href={`/yield/${s.id}`} className="text-iris-600 text-xs font-medium">Open →</Link>
                     </td>
                   </tr>
                 );

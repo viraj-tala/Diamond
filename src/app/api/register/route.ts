@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
-import { prisma } from "@/lib/prisma";
+import { eq } from "drizzle-orm";
+import { db, users } from "@/db";
 import { ROLES } from "@/lib/constants";
 
 const SELECTABLE = ROLES.filter((r) => r !== "ADMIN");
@@ -19,22 +20,41 @@ export async function POST(req: Request) {
     const data = schema.parse(body);
     const email = data.email.toLowerCase();
 
-    const exists = await prisma.user.findUnique({ where: { email } });
+    const [exists] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
     if (exists) {
       return NextResponse.json({ error: "Email already in use" }, { status: 400 });
     }
 
     const hashed = await bcrypt.hash(data.password, 10);
-    const user = await prisma.user.create({
-      data: { name: data.name, email, password: hashed, role: data.role },
-      select: { id: true, email: true, name: true, role: true },
-    });
+    const [user] = await db
+      .insert(users)
+      .values({
+        name: data.name,
+        email,
+        password: hashed,
+        role: data.role as (typeof ROLES)[number],
+      })
+      .returning({
+        id: users.id,
+        email: users.email,
+        name: users.name,
+        role: users.role,
+      });
 
     return NextResponse.json({ user });
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: err.errors[0]?.message ?? "Invalid input" }, { status: 400 });
+      return NextResponse.json(
+        { error: err.errors[0]?.message ?? "Invalid input" },
+        { status: 400 },
+      );
     }
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    console.error("[/api/register] error:", err);
+    const msg = err instanceof Error ? err.message : "Server error";
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

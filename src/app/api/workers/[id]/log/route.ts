@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { prisma } from "@/lib/prisma";
+import { db, workerDailyLogs } from "@/db";
 import { requireSession } from "@/lib/session";
 
 const schema = z.object({
@@ -16,22 +16,25 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const data = schema.parse(await req.json());
   const date = new Date(data.date);
 
-  await prisma.workerDailyLog.upsert({
-    where: { workerId_date: { workerId: params.id, date } },
-    update: {
-      piecesCompleted: data.piecesCompleted,
-      recoveryPct: data.recoveryPct,
-      errors: data.errors,
-      machineHours: data.machineHours,
-    },
-    create: {
+  await db
+    .insert(workerDailyLogs)
+    .values({
       workerId: params.id,
       date,
       piecesCompleted: data.piecesCompleted,
       recoveryPct: data.recoveryPct,
       errors: data.errors,
       machineHours: data.machineHours,
-    },
-  });
+    })
+    .onConflictDoUpdate({
+      target: [workerDailyLogs.workerId, workerDailyLogs.date],
+      set: {
+        piecesCompleted: data.piecesCompleted,
+        recoveryPct: data.recoveryPct,
+        errors: data.errors,
+        machineHours: data.machineHours,
+      },
+    });
+
   return NextResponse.json({ ok: true });
 }

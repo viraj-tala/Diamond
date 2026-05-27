@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
+import { and, count, desc, eq, ilike, type SQL } from "drizzle-orm";
+import { db, stones } from "@/db";
 import { PageHeader } from "@/components/PageHeader";
 import { StageBadge } from "@/components/Badge";
-import { StatCard } from "@/components/StatCard";
+import { EmptyState } from "@/components/EmptyState";
 import { formatDate, formatNumber } from "@/lib/utils";
-import { STAGES } from "@/lib/constants";
+import { STAGES, type Stage } from "@/lib/constants";
 import { Plus, Factory } from "lucide-react";
 
 export default async function ManufacturingPage({
@@ -15,28 +16,29 @@ export default async function ManufacturingPage({
   const stageFilter = searchParams.stage;
   const q = searchParams.q?.trim();
 
-  const where: Record<string, unknown> = {};
-  if (stageFilter && STAGES.includes(stageFilter as (typeof STAGES)[number])) {
-    where.currentStage = stageFilter;
+  const conditions: SQL[] = [];
+  if (stageFilter && STAGES.includes(stageFilter as Stage)) {
+    conditions.push(eq(stones.currentStage, stageFilter as Stage));
   }
   if (q) {
-    where.qrCode = { contains: q };
+    conditions.push(ilike(stones.qrCode, `%${q}%`));
   }
+  const where = conditions.length ? and(...conditions) : undefined;
 
-  const [stones, byStage] = await Promise.all([
-    prisma.stone.findMany({
+  const [rows, byStage] = await Promise.all([
+    db.query.stones.findMany({
       where,
-      orderBy: { updatedAt: "desc" },
-      take: 200,
-      include: { roughStone: { select: { code: true } } },
+      orderBy: [desc(stones.updatedAt)],
+      limit: 200,
+      with: { roughStone: { columns: { code: true } } },
     }),
-    prisma.stone.groupBy({
-      by: ["currentStage"],
-      _count: true,
-    }),
+    db
+      .select({ stage: stones.currentStage, c: count() })
+      .from(stones)
+      .groupBy(stones.currentStage),
   ]);
 
-  const counts = Object.fromEntries(byStage.map((s) => [s.currentStage, s._count]));
+  const counts = Object.fromEntries(byStage.map((s) => [s.stage, s.c]));
 
   return (
     <div>
@@ -53,7 +55,7 @@ export default async function ManufacturingPage({
 
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
         {STAGES.map((stage) => (
-          <Link key={stage} href={`/manufacturing?stage=${stage}`} className="card p-3 hover:border-brand-500">
+          <Link key={stage} href={`/manufacturing?stage=${stage}`} className="card p-3 hover:border-iris-400">
             <div className="text-xs text-slate-500">{stage}</div>
             <div className="text-xl font-semibold">{counts[stage] ?? 0}</div>
           </Link>
@@ -71,16 +73,18 @@ export default async function ManufacturingPage({
           {stageFilter && <input type="hidden" name="stage" value={stageFilter} />}
           <button className="btn-secondary text-sm">Search</button>
           {(stageFilter || q) && (
-            <Link href="/manufacturing" className="text-xs text-brand-600">Clear filters</Link>
+            <Link href="/manufacturing" className="text-xs text-iris-600">Clear filters</Link>
           )}
         </form>
       </div>
 
-      {stones.length === 0 ? (
-        <div className="card p-12 text-center text-slate-500">
-          <Factory className="w-8 h-8 mx-auto text-slate-300 mb-3" />
-          No stones in the factory. <Link href="/manufacturing/new" className="text-brand-600 font-medium">Add the first one</Link>.
-        </div>
+      {rows.length === 0 ? (
+        <EmptyState
+          icon={Factory}
+          title="No stones tracked yet"
+          description="Register each stone once — give it a QR code, optional RFID tag, and a start weight. From then on, every stage advance and weight loss is recorded automatically and attributed to the worker who did it."
+          cta={{ label: "Register first stone", href: "/manufacturing/new" }}
+        />
       ) : (
         <div className="table-wrap">
           <table className="table">
@@ -97,7 +101,7 @@ export default async function ManufacturingPage({
               </tr>
             </thead>
             <tbody>
-              {stones.map((s) => {
+              {rows.map((s) => {
                 const loss = s.startWeightCt - s.currentWeightCt;
                 return (
                   <tr key={s.id}>
@@ -111,7 +115,7 @@ export default async function ManufacturingPage({
                     </td>
                     <td className="text-xs text-slate-500">{formatDate(s.updatedAt)}</td>
                     <td>
-                      <Link href={`/manufacturing/${s.id}`} className="text-brand-600 text-xs font-medium">Open →</Link>
+                      <Link href={`/manufacturing/${s.id}`} className="text-iris-600 text-xs font-medium">Open →</Link>
                     </td>
                   </tr>
                 );

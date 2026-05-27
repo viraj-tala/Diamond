@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { NumberInput } from "@/components/Form";
 
 export function ToggleListingForm({ itemId, listed, listPrice }: { itemId: string; listed: boolean; listPrice: number }) {
   const router = useRouter();
@@ -38,15 +39,14 @@ export function ToggleListingForm({ itemId, listed, listPrice }: { itemId: strin
       }}
       className="space-y-2 text-sm"
     >
-      <input
-        type="number"
-        step="1"
-        min="0"
-        className="input"
+      <NumberInput
         value={price}
-        onChange={(e) => setPrice(e.target.value)}
+        onChange={setPrice}
+        step={1}
+        min={0}
         placeholder="Asking price"
         required
+        prefix="$"
       />
       <button className="btn-primary w-full text-xs" disabled={busy}>
         {busy ? "Publishing..." : "Publish listing"}

@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import { desc, eq } from "drizzle-orm";
+import { db, inquiries, inventoryItems } from "@/db";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge, Badge } from "@/components/Badge";
 import { formatCurrency, formatNumber, formatDate, formatDateTime } from "@/lib/utils";
@@ -7,9 +8,14 @@ import Link from "next/link";
 import { ToggleListingForm, MarkSoldForm } from "./actions";
 
 export default async function InventoryDetailPage({ params }: { params: { id: string } }) {
-  const item = await prisma.inventoryItem.findUnique({
-    where: { id: params.id },
-    include: { listing: { include: { inquiries: { orderBy: { createdAt: "desc" } } } }, stone: true },
+  const item = await db.query.inventoryItems.findFirst({
+    where: eq(inventoryItems.id, params.id),
+    with: {
+      listing: {
+        with: { inquiries: { orderBy: [desc(inquiries.createdAt)] } },
+      },
+      stone: true,
+    },
   });
   if (!item) notFound();
 
@@ -44,8 +50,8 @@ export default async function InventoryDetailPage({ params }: { params: { id: st
             </div>
             {(item.imageUrl || item.videoUrl) && (
               <div className="mt-4 flex gap-3">
-                {item.imageUrl && <a href={item.imageUrl} target="_blank" className="text-xs text-brand-600 underline">View image</a>}
-                {item.videoUrl && <a href={item.videoUrl} target="_blank" className="text-xs text-brand-600 underline">View video</a>}
+                {item.imageUrl && <a href={item.imageUrl} target="_blank" className="text-xs text-iris-600 underline">View image</a>}
+                {item.videoUrl && <a href={item.videoUrl} target="_blank" className="text-xs text-iris-600 underline">View video</a>}
               </div>
             )}
           </div>

@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { NumberInput } from "@/components/Form";
 
 interface Item { id: string; stoneId: string; qrCode: string; sentWeightCt: number; }
 
@@ -43,16 +44,16 @@ export function ReturnOrderForm({ orderId, items }: { orderId: string; items: It
           <div key={it.id} className="flex items-center gap-2">
             <span className="font-mono text-xs flex-1">{it.qrCode}</span>
             <span className="text-xs text-slate-400">/ {it.sentWeightCt.toFixed(2)}</span>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              max={it.sentWeightCt}
-              className="input text-sm w-24"
-              value={returns[it.id] ?? ""}
-              onChange={(e) => setReturns({ ...returns, [it.id]: e.target.value })}
-              required
-            />
+            <div className="w-24">
+              <NumberInput
+                value={returns[it.id] ?? ""}
+                onChange={(v) => setReturns({ ...returns, [it.id]: v })}
+                step={0.01}
+                min={0}
+                max={it.sentWeightCt}
+                required
+              />
+            </div>
           </div>
         ))}
       </div>

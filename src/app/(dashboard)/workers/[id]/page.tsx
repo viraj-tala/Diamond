@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import { desc, eq } from "drizzle-orm";
+import { db, incentives, workerDailyLogs, workers } from "@/db";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/Badge";
 import { formatDate, formatCurrency, formatNumber } from "@/lib/utils";
@@ -7,12 +8,12 @@ import Link from "next/link";
 import { AddLogForm, AddIncentiveForm } from "./actions";
 
 export default async function WorkerDetailPage({ params }: { params: { id: string } }) {
-  const w = await prisma.worker.findUnique({
-    where: { id: params.id },
-    include: {
+  const w = await db.query.workers.findFirst({
+    where: eq(workers.id, params.id),
+    with: {
       user: true,
-      dailyLogs: { orderBy: { date: "desc" }, take: 30 },
-      incentives: { orderBy: { monthYear: "desc" } },
+      dailyLogs: { orderBy: [desc(workerDailyLogs.date)], limit: 30 },
+      incentives: { orderBy: [desc(incentives.monthYear)] },
     },
   });
   if (!w) notFound();

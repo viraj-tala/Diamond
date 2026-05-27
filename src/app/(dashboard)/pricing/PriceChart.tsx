@@ -19,7 +19,7 @@ export function PriceChart({ data }: { data: { date: string; price: number }[] }
           <XAxis dataKey="date" tick={{ fontSize: 12 }} />
           <YAxis tick={{ fontSize: 12 }} />
           <Tooltip formatter={(v: number) => `$${v.toLocaleString()}`} />
-          <Line type="monotone" dataKey="price" stroke="#3447d6" strokeWidth={2} dot={{ r: 3 }} />
+          <Line type="monotone" dataKey="price" stroke="#6332f5" strokeWidth={2} dot={{ r: 3 }} />
         </LineChart>
       </ResponsiveContainer>
     </div>

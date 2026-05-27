@@ -1,27 +1,32 @@
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
+import { desc } from "drizzle-orm";
+import { db, workerDailyLogs, workers } from "@/db";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/Badge";
-import { formatDate, formatNumber } from "@/lib/utils";
+import { formatNumber } from "@/lib/utils";
 import { Plus, Users } from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
 
 export default async function WorkersPage() {
-  const workers = await prisma.worker.findMany({
-    include: {
-      user: { select: { name: true, email: true } },
-      dailyLogs: { orderBy: { date: "desc" }, take: 30 },
+  const all = await db.query.workers.findMany({
+    with: {
+      user: { columns: { name: true, email: true } },
+      dailyLogs: {
+        orderBy: [desc(workerDailyLogs.date)],
+        limit: 30,
+      },
     },
-    orderBy: { joinDate: "desc" },
+    orderBy: [desc(workers.joinDate)],
   });
 
-  const enriched = workers.map((w) => {
+  const enriched = all.map((w) => {
     const logs = w.dailyLogs;
     const totalPieces = logs.reduce((a, l) => a + l.piecesCompleted, 0);
     const avgRecovery = logs.length ? logs.reduce((a, l) => a + l.recoveryPct, 0) / logs.length : 0;
     const totalErrors = logs.reduce((a, l) => a + l.errors, 0);
     const totalHours = logs.reduce((a, l) => a + l.machineHours, 0);
     const efficiency = logs.length
-      ? Math.max(0, Math.min(100, avgRecovery - totalErrors / Math.max(1, totalPieces) * 100))
+      ? Math.max(0, Math.min(100, avgRecovery - (totalErrors / Math.max(1, totalPieces)) * 100))
       : 0;
     return { ...w, totalPieces, avgRecovery, totalErrors, totalHours, efficiency };
   });
@@ -40,10 +45,12 @@ export default async function WorkersPage() {
       />
 
       {enriched.length === 0 ? (
-        <div className="card p-12 text-center text-slate-500">
-          <Users className="w-8 h-8 mx-auto text-slate-300 mb-3" />
-          No workers onboarded yet.
-        </div>
+        <EmptyState
+          icon={Users}
+          title="No workers onboarded yet"
+          description="Onboard each worker once. From then on, every stage they touch is automatically attributed to them — making productivity, recovery %, and incentive payouts measurable instead of estimated."
+          cta={{ label: "Onboard the first worker", href: "/workers/new" }}
+        />
       ) : (
         <div className="table-wrap">
           <table className="table">
@@ -75,7 +82,7 @@ export default async function WorkersPage() {
                     <EfficiencyBar value={w.efficiency} />
                   </td>
                   <td>
-                    <Link href={`/workers/${w.id}`} className="text-brand-600 text-xs font-medium">Open →</Link>
+                    <Link href={`/workers/${w.id}`} className="text-iris-600 text-xs font-medium">Open →</Link>
                   </td>
                 </tr>
               ))}

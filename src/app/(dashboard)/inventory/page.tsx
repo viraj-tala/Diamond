@@ -1,10 +1,12 @@
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
+import { and, desc, eq, gte, lte, type SQL } from "drizzle-orm";
+import { db, inventoryItems } from "@/db";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/Badge";
-import { formatCurrency, formatNumber, formatDate } from "@/lib/utils";
+import { formatCurrency, formatNumber } from "@/lib/utils";
 import { SHAPES, COLORS, CLARITIES, INVENTORY_STATUSES } from "@/lib/constants";
 import { Plus, Boxes } from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
 
 interface SearchParams {
   shape?: string;
@@ -16,22 +18,26 @@ interface SearchParams {
 }
 
 export default async function InventoryPage({ searchParams }: { searchParams: SearchParams }) {
-  const where: Record<string, unknown> = {};
-  if (searchParams.shape) where.shape = searchParams.shape;
-  if (searchParams.color) where.color = searchParams.color;
-  if (searchParams.clarity) where.clarity = searchParams.clarity;
-  if (searchParams.status) where.status = searchParams.status;
+  const conditions: SQL[] = [];
+  if (searchParams.shape) conditions.push(eq(inventoryItems.shape, searchParams.shape));
+  if (searchParams.color) conditions.push(eq(inventoryItems.color, searchParams.color));
+  if (searchParams.clarity) conditions.push(eq(inventoryItems.clarity, searchParams.clarity));
+  if (searchParams.status && (INVENTORY_STATUSES as readonly string[]).includes(searchParams.status)) {
+    conditions.push(eq(inventoryItems.status, searchParams.status as (typeof INVENTORY_STATUSES)[number]));
+  }
+  if (searchParams.caratMin) {
+    conditions.push(gte(inventoryItems.caratWeight, parseFloat(searchParams.caratMin)));
+  }
+  if (searchParams.caratMax) {
+    conditions.push(lte(inventoryItems.caratWeight, parseFloat(searchParams.caratMax)));
+  }
+  const where = conditions.length ? and(...conditions) : undefined;
 
-  const caratFilter: { gte?: number; lte?: number } = {};
-  if (searchParams.caratMin) caratFilter.gte = parseFloat(searchParams.caratMin);
-  if (searchParams.caratMax) caratFilter.lte = parseFloat(searchParams.caratMax);
-  if (Object.keys(caratFilter).length) where.caratWeight = caratFilter;
-
-  const items = await prisma.inventoryItem.findMany({
+  const items = await db.query.inventoryItems.findMany({
     where,
-    orderBy: { createdAt: "desc" },
-    include: { listing: true },
-    take: 200,
+    orderBy: [desc(inventoryItems.createdAt)],
+    with: { listing: true },
+    limit: 200,
   });
 
   return (
@@ -70,10 +76,12 @@ export default async function InventoryPage({ searchParams }: { searchParams: Se
       </form>
 
       {items.length === 0 ? (
-        <div className="card p-12 text-center text-slate-500">
-          <Boxes className="w-8 h-8 mx-auto text-slate-300 mb-3" />
-          No items match. <Link href="/inventory/new" className="text-brand-600 font-medium">Add stock</Link>.
-        </div>
+        <EmptyState
+          icon={Boxes}
+          title="No inventory items match"
+          description="Add polished stones to stock here. Each item carries full spec, certification, media, and price — and can be published to your B2B marketplace with one click."
+          cta={{ label: "Add inventory item", href: "/inventory/new" }}
+        />
       ) : (
         <div className="table-wrap">
           <table className="table">
@@ -104,7 +112,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Se
                   <td><StatusBadge status={i.status} /></td>
                   <td className="text-xs">{i.listing ? "Public" : "—"}</td>
                   <td>
-                    <Link href={`/inventory/${i.id}`} className="text-brand-600 text-xs font-medium">Open →</Link>
+                    <Link href={`/inventory/${i.id}`} className="text-iris-600 text-xs font-medium">Open →</Link>
                   </td>
                 </tr>
               ))}
